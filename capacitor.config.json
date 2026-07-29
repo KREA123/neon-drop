@@ -1,0 +1,12 @@
+{
+  "appId": "ro.krea.neondrop",
+  "appName": "Neon Drop",
+  "webDir": "www",
+  "ios": { "contentInset": "always" },
+  "plugins": {
+    "AdMob": {
+      "appIdAndroid": "ca-app-pub-4731088109605726~9292910932",
+      "appIdIos": "ca-app-pub-4731088109605726~1669451645"
+    }
+  }
+}
