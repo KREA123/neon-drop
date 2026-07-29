@@ -6,7 +6,6 @@
 workflows:
   android-neondrop:
     name: Neon Drop Android
-    instance_type: linux_x2
     max_build_duration: 60
     environment:
       groups:
