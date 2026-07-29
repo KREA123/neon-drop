@@ -1,15 +1,19 @@
 # Codemagic cloud build — Neon Drop Android (.aab) — no Mac needed.
-# In Codemagic: Add application -> connect your GitHub repo -> pick "android-neondrop".
-# Before the first build, add an Environment variable group named "keystore" with 3 vars
-# (mark them "Secure"):  KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD  (any values you choose).
+# IMPORTANT: uses your saved keystore so every build is signed with the SAME key.
+# Setup (once): Codemagic -> Settings -> Code signing identities -> Android keystores
+#   -> Add keystore -> upload keystore.jks
+#      Reference name: neondrop_keystore
+#      Keystore password: NeonDrop2026
+#      Key alias: neondrop
+#      Key password: NeonDrop2026
 
 workflows:
   android-neondrop:
     name: Neon Drop Android
     max_build_duration: 60
     environment:
-      groups:
-        - keystore            # provides KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      android_signing:
+        - neondrop_keystore     # the keystore you uploaded in Code signing identities
       node: 20
       java: 17
       vars:
@@ -49,24 +53,17 @@ workflows:
           PY
           fi
 
-      - name: Create upload keystore
-        script: |
-          keytool -genkeypair -v -keystore "$CM_BUILD_DIR/keystore.jks" \
-            -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
-            -dname "CN=Neon Drop, OU=Krea, O=Krea, L=NA, ST=NA, C=RO"
-
-      - name: Configure release signing
+      - name: Configure release signing (use uploaded keystore)
         script: |
           cat >> android/app/build.gradle <<'GRADLE'
 
           android {
               signingConfigs {
                   release {
-                      storeFile file(System.getenv("CM_BUILD_DIR") + "/keystore.jks")
-                      storePassword System.getenv("KEYSTORE_PASSWORD")
-                      keyAlias System.getenv("KEY_ALIAS")
-                      keyPassword System.getenv("KEY_PASSWORD")
+                      storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                      storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("CM_KEY_ALIAS")
+                      keyPassword System.getenv("CM_KEY_PASSWORD")
                   }
               }
               buildTypes {
@@ -84,4 +81,3 @@ workflows:
 
     artifacts:
       - android/app/build/outputs/**/*.aab
-      - keystore.jks          # DOWNLOAD THIS and keep it safe — you need it for future updates
