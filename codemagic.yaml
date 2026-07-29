@@ -18,15 +18,6 @@ workflows:
           npx cap add android || true
           npx cap sync android
 
-      - name: Target Android 35 + set version
-        script: |
-          sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
-          sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
-          echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
-          echo "versionCode BEFORE:"; grep -n "versionCode" android/app/build.gradle || true
-          sed -i -E 's/versionCode[[:space:]=]+[0-9]+/versionCode 3/' android/app/build.gradle
-          echo "versionCode AFTER:"; grep -n "versionCode" android/app/build.gradle || true
-
       - name: Inject AdMob App ID into AndroidManifest
         script: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
@@ -41,11 +32,18 @@ workflows:
           PY
           fi
 
-      - name: Configure release signing
+      - name: Force version, SDK 35 and signing
         script: |
+          echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
           cat >> android/app/build.gradle <<'GRADLE'
 
           android {
+              compileSdk 35
+              defaultConfig {
+                  versionCode 3
+                  versionName "1.0"
+                  targetSdkVersion 35
+              }
               signingConfigs {
                   release {
                       storeFile file(System.getenv("CM_KEYSTORE_PATH"))
