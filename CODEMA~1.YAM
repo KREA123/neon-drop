@@ -1,0 +1,87 @@
+# Codemagic cloud build — Neon Drop Android (.aab) — no Mac needed.
+# In Codemagic: Add application -> connect your GitHub repo -> pick "android-neondrop".
+# Before the first build, add an Environment variable group named "keystore" with 3 vars
+# (mark them "Secure"):  KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD  (any values you choose).
+
+workflows:
+  android-neondrop:
+    name: Neon Drop Android
+    max_build_duration: 60
+    environment:
+      groups:
+        - keystore            # provides KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      node: 20
+      java: 17
+      vars:
+        ADMOB_APP_ID: "ca-app-pub-4731088109605726~9292910932"
+    scripts:
+      - name: Install dependencies
+        script: npm install
+
+      - name: Add Android platform + sync web assets
+        script: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Target Android 35 + set version
+        script: |
+          # Google Play requires new apps to target API level 35
+          sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
+          sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
+          # allow compiling against SDK 35 with the current Android Gradle Plugin
+          echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
+          # bump the version so Play accepts the new bundle
+          sed -i -E 's/versionCode [0-9]+/versionCode 2/' android/app/build.gradle
+          echo "--- variables.gradle ---"; cat android/variables.gradle
+
+      - name: Inject AdMob App ID into AndroidManifest
+        script: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST"; then
+            python3 - "$MANIFEST" "$ADMOB_APP_ID" <<'PY'
+          import sys
+          path, appid = sys.argv[1], sys.argv[2]
+          s = open(path).read()
+          meta = '        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="%s"/>\n' % appid
+          s = s.replace("</application>", meta + "    </application>")
+          open(path, "w").write(s)
+          print("AdMob App ID injected")
+          PY
+          fi
+
+      - name: Create upload keystore
+        script: |
+          keytool -genkeypair -v -keystore "$CM_BUILD_DIR/keystore.jks" \
+            -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+            -dname "CN=Neon Drop, OU=Krea, O=Krea, L=NA, ST=NA, C=RO"
+
+      - name: Configure release signing
+        script: |
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("CM_BUILD_DIR") + "/keystore.jks")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          GRADLE
+
+      - name: Build signed AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - keystore.jks          # DOWNLOAD THIS and keep it safe — you need it for future updates
