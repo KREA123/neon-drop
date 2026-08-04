@@ -18,6 +18,10 @@ workflows:
           npx cap add android || true
           npx cap sync android
 
+      - name: Generate app icons (match store icon)
+        script: |
+          npx capacitor-assets generate --android
+
       - name: Inject AdMob App ID into AndroidManifest
         script: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
@@ -40,7 +44,7 @@ workflows:
           android {
               compileSdk 35
               defaultConfig {
-                  versionCode 3
+                  versionCode 4
                   versionName "1.0"
                   targetSdkVersion 35
               }
